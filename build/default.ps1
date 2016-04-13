@@ -9,7 +9,6 @@ properties {
     $srcDir = "$baseDir\src"
     $buildType = if ($buildType -eq $null) { "debug" } else { $buildType }
     $slnFile = "$srcDir\EventProjector.sln"
-    $buildNumber = if ( "$env:BUILD_NUMBER".length -gt 0 ) { "$env:BUILD_NUMBER" } else { "0" }
 }
 
 task default -depends Compile, Package
@@ -21,11 +20,11 @@ Task Clean {
     }
 
     mkdir $artifactsDir | out-null
-    Exec { msbuild "$slnFile" /t:Clean /p:Configuration=$buildType /v:quiet } 
+    Exec { msbuild "$slnFile" /t:Clean /p:Configuration=$buildType /v:quiet /p:OutDir=$binDir } 
 }
 
 Task Compile -Depends Clean { 
-    Exec { msbuild "$slnFile" /t:Build /p:Configuration=$buildType /v:quiet }  
+    Exec { msbuild "$slnFile" /t:Build /p:Configuration=$buildType /v:quiet /p:OutDir=$binDir }  
 }
 
 Task Package {
