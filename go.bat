@@ -1,0 +1,1 @@
+powershell -NoProfile -Command .\go.ps1 
