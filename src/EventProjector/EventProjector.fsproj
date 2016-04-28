@@ -41,8 +41,9 @@
     <Compile Include="EventStorefs.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="OneState.fs" />
-    <Compile Include="TwoStates.fs" />
+    <Compile Include="ThreeStates.fs" />
     <Content Include="packages.config" />
+    <Compile Include="TwoStates.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="EventStore.ClientAPI">

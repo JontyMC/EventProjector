@@ -182,7 +182,7 @@ type ProjectionBuilder() =
 
 let project = ProjectionBuilder()
 
-let rec parseIds (empty1, empty2) =
+let parseIds (empty1, empty2) =
     let rec parseIdsForRequest =
         function
         | LoadState1 (id, f) ->
@@ -194,31 +194,36 @@ let rec parseIds (empty1, empty2) =
         | SaveState1 (_, _, rest) -> parseIdsForRequest rest
         | SaveState2 (_, _, rest) -> parseIdsForRequest rest
         | Return _ -> (Set.empty, Set.empty)
-    function
-    | head :: tail ->
-        let (ids1Head, ids2Head) = parseIdsForRequest head
-        let (ids1Tail, ids2Tail) = parseIds (empty1, empty2) tail
-        (Set.union ids1Head ids1Tail, Set.union ids2Head ids2Tail)
-    | [] -> (Set.empty, Set.empty)
 
-let rec executeBatch (states1:States<'State1>, states2:States<'State2>) request =
-    match request with
-    | LoadState1 (id, f) :: tail ->
-        let success, state = states1.TryGetValue id
-        if success then executeBatch (states1, states2) ((f state) :: tail)
-        else LoadState1 (id, f) :: executeBatch (states1, states2) tail
-    | LoadState2 (id, f) :: tail ->
-        let success, state = states2.TryGetValue id
-        if success then executeBatch (states1, states2) ((f state) :: tail)
-        else LoadState2 (id, f) :: executeBatch (states1, states2) tail
-    | SaveState1 (id, a, f) :: tail ->
-        states1.[id] <- a
-        executeBatch (states1, states2) (f :: tail)
-    | SaveState2 (id, a, f) :: tail ->
-        states2.[id] <- a
-        executeBatch (states1, states2) (f :: tail)
-    | Return x :: tail -> executeBatch (states1, states2) tail
-    | [] -> []
+    let requestsToIds requests =
+        requests
+        |> List.map parseIdsForRequest
+        |> List.reduce (fun (ids1Acc, ids2Acc) (ids1, ids2) -> (Set.union ids1 ids1Acc, Set.union ids2 ids2Acc))
+        
+    requestsToIds
+
+let executeBatch states requests =
+    let executeRequestUntilIdNotFound acc request =
+        let rec reduceRequest (unprocessedRequests, (states1:States<'State1>, states2:States<'State2>)) request = 
+            match request with 
+            | LoadState1 (id, f) -> 
+                let success, state = states1.TryGetValue id
+                if success then  reduceRequest (unprocessedRequests, (states1, states2)) (f state)
+                else (LoadState1 (id, f) :: unprocessedRequests, (states1, states2))
+            | LoadState2 (id, f) ->
+                let success, state = states2.TryGetValue id
+                if success then reduceRequest (unprocessedRequests, (states1, states2)) (f state)
+                else (LoadState2 (id, f) :: unprocessedRequests, (states1, states2))
+            | SaveState1 (id, s, r) -> 
+                states1.[id] <- s
+                reduceRequest (unprocessedRequests, (states1, states2)) r
+            | SaveState2 (id, s, r) -> 
+                states2.[id] <- s
+                reduceRequest (unprocessedRequests, (states1, states2)) r
+            | Return x -> (unprocessedRequests, (states1, states2))
+        reduceRequest acc request
+
+    List.fold executeRequestUntilIdNotFound ([], states) requests
 
 let setStates (ids1, ids2) (states1, states2) (empty1, empty2) (states1Loaded, states2Loaded) = 
     let setState (states:States<'State>) (statesLoaded:States<'State>) empty id = 
@@ -233,7 +238,7 @@ let execBatches load emptyStates requests =
         let ids = parseIds emptyStates requests
         let! loadedStates = load ids
         setStates ids states emptyStates loadedStates
-        let requests1 =  executeBatch states requests
+        let requests1, states = executeBatch states requests
         if requests1.IsEmpty
         then return states
         else return! execBatches requests1 states
