@@ -176,32 +176,37 @@ type ProjectionBuilder() =
 
 let project = ProjectionBuilder()
 
-let rec parseIds empty =
+let parseIds empty =
     let rec parseIdsForRequest =
         function
         | LoadState (id, f) ->
-            let ids:Id Set = parseIdsForRequest (f empty)
-            ids.Add id
+            let ids1:Id Set = parseIdsForRequest (f empty)
+            ids1.Add id
         | SaveState (_, _, rest) -> parseIdsForRequest rest
         | Return _ -> Set.empty
-    function
-    | head :: tail ->
-        let idsHead = parseIdsForRequest head
-        let idsTail = parseIds empty tail
-        Set.union idsHead idsTail
-    | [] -> Set.empty
 
-let rec executeBatch (states:States<'State>) request =
-    match request with
-    | LoadState (id, f) :: tail ->
-        let success, state = states.TryGetValue id
-        if success then executeBatch states ((f state) :: tail)
-        else LoadState (id, f) :: executeBatch states tail
-    | SaveState (id, a, f) :: tail ->
-        states.[id] <- a
-        executeBatch states (f :: tail)
-    | Return x :: tail -> executeBatch states tail
-    | [] -> []
+    let requestsToIds requests =
+        requests
+        |> List.map parseIdsForRequest
+        |> List.reduce (fun idsAcc ids -> Set.union ids idsAcc)
+        
+    requestsToIds
+
+let executeBatch states requests =
+    let executeRequestUntilIdNotFound acc request =
+        let rec reduceRequest (unprocessedRequests, (states:States<'State>)) request = 
+            match request with 
+            | LoadState (id, f) -> 
+                let success, state = states.TryGetValue id
+                if success then  reduceRequest (unprocessedRequests, states) (f state)
+                else (LoadState (id, f) :: unprocessedRequests, states)
+            | SaveState (id, s, r) -> 
+                states.[id] <- s
+                reduceRequest (unprocessedRequests, states) r
+            | Return x -> (unprocessedRequests, states)
+        reduceRequest acc request
+
+    List.fold executeRequestUntilIdNotFound ([], states) requests
 
 let setStates ids states empty statesLoaded = 
     let setState (states:States<'State>) (statesLoaded:States<'State>) empty id = 
@@ -215,7 +220,7 @@ let execBatches load emptyStates requests =
         let ids = parseIds emptyStates requests
         let! loadedStates = load ids
         setStates ids states emptyStates loadedStates
-        let requests1 =  executeBatch states requests
+        let requests1, states =  executeBatch states requests
         if requests1.IsEmpty
         then return states
         else return! execBatches requests1 states
