@@ -65,7 +65,7 @@ let parseIds (empty1, empty2, empty3) =
     let requestsToIds requests =
         requests
         |> List.map parseIdsForRequest
-        |> List.reduce (fun (ids1Acc, ids2Acc, ids3Acc) (ids1, ids2, ids3) -> (Set.union ids1 ids1Acc, Set.union ids2 ids2Acc, Set.union ids3 ids3Acc))
+        |> List.fold (fun (ids1Acc, ids2Acc, ids3Acc) (ids1, ids2, ids3) -> (Set.union ids1 ids1Acc, Set.union ids2 ids2Acc, Set.union ids3 ids3Acc)) (Set.empty, Set.empty, Set.empty)
         
     requestsToIds
 

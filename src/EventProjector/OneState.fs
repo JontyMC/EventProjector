@@ -188,7 +188,7 @@ let parseIds empty =
     let requestsToIds requests =
         requests
         |> List.map parseIdsForRequest
-        |> List.reduce (fun idsAcc ids -> Set.union ids idsAcc)
+        |> List.fold (fun idsAcc ids -> Set.union ids idsAcc) Set.empty
         
     requestsToIds
 
