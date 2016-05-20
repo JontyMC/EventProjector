@@ -59,6 +59,6 @@ type BatchedEventSubscriber(subscriptions:seq<(Event -> unit) -> unit -> unit>, 
             then ThreadPool.QueueUserWorkItem(fun _ -> executeBatch()) |> ignore
         let unsubscribes = subscriptions |> Seq.map (fun x -> x eventAppeared) |> Seq.toArray
         let handleRemainingEvents () =
-            while !batchExecuting = 1 || eventQueue.Count > 0 do ()
             Seq.iter (fun x -> x()) unsubscribes
+            while !batchExecuting = 1 || eventQueue.Count > 0 do ()
         handleRemainingEvents
