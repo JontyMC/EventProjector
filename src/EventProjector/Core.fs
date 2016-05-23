@@ -1,5 +1,6 @@
 ﻿module EventProjector.Core
 
+open System.Diagnostics
 open System.Collections.Generic
 open System.Collections.Concurrent
 open EventProjector.Logging
@@ -31,7 +32,7 @@ type LoadCheckpoints = seq<Category> -> Async<IDictionary<Category, Checkpoint>>
 type EventNumbers = IDictionary<Category, EventNumber>
 type States<'State> = IDictionary<Id, 'State>
 
-type BatchedEventSubscriber(subscriptions:seq<(Event -> unit) -> unit -> unit>, project, batchSize:int) =
+type BatchedEventSubscriber(subscriptions:seq<(Event -> unit) -> unit -> unit>, project, batchSize:int, timeOut:int) =
     let eventQueue = new BlockingCollection<Event>(new ConcurrentQueue<Event>(), batchSize)
     let batchExecuting = ref 0
 
@@ -52,13 +53,15 @@ type BatchedEventSubscriber(subscriptions:seq<(Event -> unit) -> unit -> unit>, 
             }
             loopUntilEmpty (List<Event>())
         let eventAppeared event =
-            let executeBatch () =
+            let executeBatch () =   
                 executeBatch() |> Async.Catch |> Async.RunSynchronously |> Async.Rethrow
             eventQueue.Add event
             if Interlocked.CompareExchange(batchExecuting, 1, 0) = 0
             then ThreadPool.QueueUserWorkItem(fun _ -> executeBatch()) |> ignore
         let unsubscribes = subscriptions |> Seq.map (fun x -> x eventAppeared) |> Seq.toArray
         let handleRemainingEvents () =
+            let timeOut = int64 (timeOut * 1000)
             Seq.iter (fun x -> x()) unsubscribes
-            while !batchExecuting = 1 || eventQueue.Count > 0 do ()
+            let stopwatch = Stopwatch.StartNew()
+            while stopwatch.ElapsedMilliseconds < timeOut && (!batchExecuting = 1 || eventQueue.Count > 0) do ()
         handleRemainingEvents

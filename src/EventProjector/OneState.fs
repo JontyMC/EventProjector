@@ -255,11 +255,11 @@ let execute projection serializer stateStore emptyStates batchComplete (events:s
     ()
 }
 
-let subscribeProjection projection serializer subscriptions stateStore emptyStates batchSize batchComplete = async {
+let subscribeProjection projection serializer subscriptions stateStore emptyStates batchSize batchComplete timeout = async {
     let categories = subscriptions |> Seq.map (fun x -> x.Category)
     let! checkpoints = stateStore.LoadCheckpoints categories
     let subscriptions = subscriptions |> Seq.map (fun x -> x.Subscribe checkpoints.[x.Category])
     let execute = execute projection serializer stateStore emptyStates batchComplete
-    let subscriber = BatchedEventSubscriber(subscriptions, execute, batchSize)
+    let subscriber = BatchedEventSubscriber(subscriptions, execute, batchSize, timeout)
     return subscriber.Subscribe()
 }
